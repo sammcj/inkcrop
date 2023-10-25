@@ -14,6 +14,7 @@ install:
 	@echo "Installing inkcrop"
 	@cp dist/inkcrop /usr/local/bin/inkcrop
 	@echo "Install complete"
+	@ls -la /usr/local/bin/inkcrop
 
 uninstall:
 	@echo "Uninstalling inkcrop"
