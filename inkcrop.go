@@ -81,7 +81,6 @@ func ditherImage(img image.Image, ditherAlg string, ditherStrength float32, dith
 						d.Matrix = dither.ErrorDiffusionStrength(dither.FalseFloydSteinberg, ditherStrength)
 			} // see https://github.com/makew0rld/dither for more
 
-
 		// Dither the image, attempting to modify the existing image
 		// If it can't then a dithered copy will be returned.
 		img = d.Dither(img)
@@ -89,7 +88,7 @@ func ditherImage(img image.Image, ditherAlg string, ditherStrength float32, dith
 		return img
 }
 
-func watcherDaemon(input string, matches []string, outdir string, dither *bool, ditherAlg *string, ditherStrength float32, ditherSerpentine *bool, rotate *bool, crop *bool, quality *int) {
+func watcherDaemon(input string, matches []string, outdir string, dither *bool, ditherAlg *string, ditherStrength float32, ditherSerpentine *bool, quality *int, width float32, height float32, zoom int) {
 	// if the input is a file / glob pattern, use the directory name
 	if strings.Contains(input, "*") {
 		input = input[:strings.LastIndex(input, "/")]
@@ -123,7 +122,7 @@ func watcherDaemon(input string, matches []string, outdir string, dither *bool, 
 				if err != nil {
 					log.Fatal(err)
 				}
-				processImages(&input, matches, outdir, dither, ditherAlg, ditherStrength, ditherSerpentine, rotate, crop, quality)
+				processImages(&input, matches, outdir, dither, ditherAlg, ditherStrength, ditherSerpentine, quality, width, height, zoom)
 			}
 
 		case err, ok := <-fsWatcher.Errors:
@@ -188,7 +187,7 @@ func slideShowDaemon(input string, matches []string, outdir string, linkTimer in
 }
 
 
-func processImages(input *string, matches []string, outdir string, dither *bool, ditherAlg *string, ditherStrength float32, ditherSerpentine *bool, rotate *bool, crop *bool, quality *int) {
+func processImages(input *string, matches []string, outdir string, dither *bool, ditherAlg *string, ditherStrength float32, ditherSerpentine *bool, quality *int, width float32, height float32, zoom int) {
 
 	log.Printf("Processing images from %s to %s\n", *input, outdir)
 
@@ -227,39 +226,27 @@ func processImages(input *string, matches []string, outdir string, dither *bool,
 			// Dither the image
 			img = ditherImage(img, *ditherAlg, ditherStrength, *ditherSerpentine)
 		}
-		if *rotate {
-			// Rotate the image 90 degrees clockwise
-			img = imaging.Rotate90(img)
-		}
-		if *crop {
-			// Crop the image to 960x540
-			img = imaging.CropCenter(img, 960, 540)
-		}
-
-		file.Close()
 
 		if img.Bounds().Max.Y > img.Bounds().Max.X {
 			log.Printf("Image wider than higher, rotating 90 degrees!")
 			img = imaging.Rotate(img, 90.0, color.Gray{})
 		}
 
-		newSize := CalculateDimensions(img.Bounds().Max, 960.0, 540.0)
+		// call the autoRotate function
+		img = autoRotateImage(img)
 
-		m := imaging.Resize(img, newSize.X, newSize.Y, imaging.Lanczos)
-		width := newSize.X
-		height := newSize.Y
+		// call the resize function
+		img = resizeImage(img, width, height)
 
-		log.Printf("Resized from %dx%d to %dx%d\n", img.Bounds().Max.X, img.Bounds().Max.Y, width, height)
-
-		offsetX := int((960 - width) / 2.0)
-		offsetY := int((540 - height) / 2.0)
+		// call the zoom function
+		img = zoomImage(img, float64(zoom))
 
 		// if a ditherer was used add the algorithm to the filename
 		if *dither {
 			baseName = baseName + "-" + *ditherAlg
 		}
 
-		filename := fmt.Sprintf("%s_%dx%d_%dx%d_resized.jpg", baseName, width, height, offsetX, offsetY)
+		filename := fmt.Sprintf("%s_%dx%d_resized.jpg", baseName, int(width), int(height))
 		// Concatenate output directory and filename using string concatenation
 		outpath := outdir + "/" + filename
 
@@ -274,7 +261,7 @@ func processImages(input *string, matches []string, outdir string, dither *bool,
 			log.Fatal(err)
 		}
 
-		err = jpeg.Encode(out, m, &jpeg.Options{Quality: *quality})
+		err = jpeg.Encode(out, img, &jpeg.Options{Quality: *quality})
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -285,16 +272,39 @@ func processImages(input *string, matches []string, outdir string, dither *bool,
 	}
 }
 
+func zoomImage(img image.Image, zoom float64) image.Image {
+	img = imaging.Resize(img, int(float64(img.Bounds().Max.X) * zoom), int(float64(img.Bounds().Max.Y) * zoom), imaging.Lanczos)
+	log.Printf("Zoomed from %dx%d to %dx%d\n", img.Bounds().Max.X, img.Bounds().Max.Y, img.Bounds().Max.X, img.Bounds().Max.Y)
+	return img
+}
+
+func autoRotateImage(img image.Image) image.Image {
+		if img.Bounds().Max.Y > img.Bounds().Max.X {
+		log.Printf("Image wider than higher, rotating 90 degrees!")
+		img = imaging.Rotate(img, 90.0, color.Gray{})
+	}
+	return img
+}
+
+func resizeImage(img image.Image, width float32, height float32) image.Image {
+	newSize := CalculateDimensions(img.Bounds().Max, width, height)
+	m := imaging.Resize(img, newSize.X, newSize.Y, imaging.Lanczos)
+	log.Printf("Resized from %dx%d to %dx%d\n", img.Bounds().Max.X, img.Bounds().Max.Y, m.Bounds().Max.X, m.Bounds().Max.Y)
+	return m
+}
+
+//////// MAIN ////////
 func main() {
 	input := flag.String("input", "*.jp*g", "input file or glob pattern")
 	output := flag.String("output", "output", "output directory")
+	widthInt := flag.Int("width", 960, "width of the output image")
+	heightInt := flag.Int("height", 540, "height of the output image")
+	zoomF64 := flag.Float64("zoom", 1, "zoom factor")
 	dither := flag.Bool("dither", true, "dither the image")
 	ditherAlg := flag.String("ditherAlg", "StevenPigeon", "dithering algorithm to use (see makew0rld/dither)")
 	ditherAll := flag.Bool("ditherAll", false, "dither each image with all algorithms")
-	ditherStrength64 := flag.Float64("ditherStrength", 0.9, "dithering strength (0-1)")
+	ditherStrength64 := flag.Float64("ditherStrength", 1, "dithering strength (0-1)")
 	ditherSerpentine := flag.Bool("ditherSerpentine", false, "enable Serpentine dithering")
-	rotate := flag.Bool("rotate", false, "rotate the image 90 degrees clockwise")
-	crop := flag.Bool("crop", false, "crop the image to 960x540")
 	quality := flag.Int("quality", 80, "set the JPEG quality 0-100 (%)")
 	daemon := flag.Bool("daemon", false, "run as a daemon monitoring the input directory for new images")
 	link := flag.Bool("link", false, "run as a daemon linking the input directory for new images")
@@ -321,25 +331,28 @@ func main() {
 		}
 	}
 
-	// convert ditherStrength to float32
+	width := float32(*widthInt)
+	height := float32(*heightInt)
 	ditherStrength := float32(*ditherStrength64)
+	zoom := int(*zoomF64)
+
 
 	if *ditherAll {
 		ditherAlgs := []string{"FloydSteinberg", "JarvisJudiceNinke", "Stucki", "Atkinson", "Sierra", "Sierra2", "SierraLite", "StevenPigeon", "Burkes", "FalseFloydSteinberg"}
 		for _, ditherAlg := range ditherAlgs {
 			ditherAlg := ditherAlg
-			processImages(input, matches, outdir, dither, &ditherAlg, ditherStrength, ditherSerpentine, rotate, crop, quality)
+			processImages(input, matches, outdir, dither, &ditherAlg, ditherStrength, ditherSerpentine, quality, width, height, zoom)
 		}
 	} else {
 		if *daemon {
 			input := *input
-			watcherDaemon(input, matches, outdir, dither, ditherAlg, ditherStrength, ditherSerpentine, rotate, crop, quality)
+			watcherDaemon(input, matches, outdir, dither, ditherAlg, ditherStrength, ditherSerpentine, quality, width, height, zoom)
 		} else if *link {
 			input := *input
 			linkTimer := *linkTimer
 			slideShowDaemon(input, matches, outdir, linkTimer)
 		} else {
-			processImages(input, matches, outdir, dither, ditherAlg, ditherStrength, ditherSerpentine, rotate, crop, quality)
+			processImages(input, matches, outdir, dither, ditherAlg, ditherStrength, ditherSerpentine, quality, width, height, zoom)
 		}
 	}
 }
