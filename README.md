@@ -1,18 +1,21 @@
 # Inkcrop
 
-Image processor for e-ink / epaper displays.
+Image preprocessor for e-ink / e-paper displays.
+
+**WORK IN PROGRESS**
+
+![](logo.png)
 
 ---
 
-WORK IN PROGRESS
+TODO / not yet finished:
 
-TODO:
-
+- Daemon mode
 - Custom resolutions
+- Overwrite flag
 - Colour support
-- Custom rotation
 - CI/CD
-- Go package
+- Publish go package
 - Docker image
 - Docs
 
@@ -21,7 +24,7 @@ TODO:
 ## Example
 
 ```shell
-incrop -input example_input.jpg -output example_output.jpg -dither True
+inkcrop -input example_input.jpg -output example_output.jpg -dither True
 ```
 
 Input:

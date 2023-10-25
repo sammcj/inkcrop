@@ -43,19 +43,11 @@ func ditherImage(img image.Image, ditherAlg string, ditherStrength float32, dith
 		palette := []color.Color{
 				color.Black,
 				color.White,
-				// greyscale 16 colours
-				// color.RGBA{0x00, 0x00, 0x00, 0xff},
-				// color.RGBA{0x1c, 0x1c, 0x1c, 0xff},
-				// color.RGBA{0x39, 0x39, 0x39, 0xff},
-				// color.RGBA{0x59, 0x59, 0x59, 0xff},
-				// color.RGBA{0x76, 0x76, 0x76, 0xff},
-				// color.RGBA{0x94, 0x94, 0x94, 0xff},
-				// color.RGBA{0xb2, 0xb2, 0xb2, 0xff},
-				// color.RGBA{0xd0, 0xd0, 0xd0, 0xff},
-				// color.RGBA{0xe8, 0xe8, 0xe8, 0xff},
-				// color.RGBA{0xff, 0xff, 0xff, 0xff},
-				// color.RGBA{0xff, 0x00, 0x00, 0xff},
-				// color.RGBA{0x00, 0xff, 0x00, 0xff},
+				// color.Gray16{
+				// 		Y: uint16(65535 * ditherStrength),
+				// },
+				color.Gray16{},
+				color.Transparent,
 		}
 
 		// Create ditherer
@@ -299,7 +291,7 @@ func main() {
 	dither := flag.Bool("dither", true, "dither the image")
 	ditherAlg := flag.String("ditherAlg", "StevenPigeon", "dithering algorithm to use (see makew0rld/dither)")
 	ditherAll := flag.Bool("ditherAll", false, "dither each image with all algorithms")
-	ditherStrength64 := flag.Float64("ditherStrength", 0.8, "dithering strength (0-1)")
+	ditherStrength64 := flag.Float64("ditherStrength", 0.9, "dithering strength (0-1)")
 	ditherSerpentine := flag.Bool("ditherSerpentine", false, "enable Serpentine dithering")
 	rotate := flag.Bool("rotate", false, "rotate the image 90 degrees clockwise")
 	crop := flag.Bool("crop", false, "crop the image to 960x540")
